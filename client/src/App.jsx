@@ -19,7 +19,7 @@ const activeCases = batchResult?.results
 
   try {
     // 1. Ask our backend to create a recovery order
-    const response = await fetch("https://recoverai-backend-ckze.onrender.com", {
+    const response = await fetch("https://recoverai-backend-ckze.onrender.com/api/recovery/execute", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -52,7 +52,7 @@ const activeCases = batchResult?.results
       handler: async function (paymentResponse) {
   try {
     const verifyResponse = await fetch(
-      "https://recoverai-backend-ckze.onrender.com",
+      "https://recoverai-backend-ckze.onrender.com/api/payment/verify",
       {
         method: "POST",
         headers: {
@@ -116,7 +116,7 @@ const activeCases = batchResult?.results
   setBatchResult(null);
 
   try {
-    const response = await fetch("https://recoverai-backend-ckze.onrender.com", {
+    const response = await fetch("https://recoverai-backend-ckze.onrender.com/api/recovery/batch", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
