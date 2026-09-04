@@ -1,16 +1,48 @@
-# React + Vite
+# RecoverAI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+### AI-Powered Payment Revenue Recovery Agent
 
-Currently, two official plugins are available:
+RecoverAI is an AI payment-recovery agent that identifies revenue at risk, understands why a payment failed, chooses the safest recovery action, executes it through Razorpay, and measures the revenue recovered.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Problem
 
-## React Compiler
+Failed payments and checkout abandonment create direct revenue loss for businesses.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Most payment systems stop after reporting a failed transaction. RecoverAI goes one step further by deciding what should happen next.
 
-## Expanding the ESLint configuration
+## Solution
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+RecoverAI analyzes recovery cases and selects one of three actions:
+
+- **RETRY** — retry the payment when the case appears recoverable
+- **PAYMENT LINK** — provide an alternative payment path after checkout abandonment
+- **STOP** — stop recovery attempts when the case is risky or has exceeded the allowed attempts
+
+The AI decision is always controlled by deterministic safety guardrails.
+
+> **The AI chooses the strategy, but deterministic guardrails have the final say.**
+
+## How It Works
+
+```text
+Customer
+   ↓
+Razorpay Payment
+   ↓
+Payment Failure / Checkout Abandonment
+   ↓
+RecoverAI Backend
+   ↓
+AI Decision Engine
+   ↓
+Safety Guardrails
+   ↓
+┌───────────┬──────────────┬─────────┐
+│   RETRY   │ PAYMENT LINK │  STOP   │
+└───────────┴──────────────┴─────────┘
+       ↓
+Razorpay Recovery Action
+       ↓
+Payment Verification
+       ↓
+Revenue Recovered + Audit Trail
