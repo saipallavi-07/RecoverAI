@@ -303,6 +303,7 @@ Return ONLY valid JSON:
     }
   });
   app.post("/api/recovery/batch", async (req, res) => {
+  try {
     const cases = [
       { customer: "Rahul", amount: 4999, reason: "payment_failed", attempts: 0 },
       { customer: "Priya", amount: 2499, reason: "checkout_abandoned", attempts: 0 },
@@ -311,23 +312,117 @@ Return ONLY valid JSON:
       { customer: "Vikram", amount: 3999, reason: "payment_failed", attempts: 1 },
     ];
 
-    const results = cases.map((item) => {
-      let action;
+    const results = await Promise.all(
+      cases.map(async (item) => {
+        // Deterministic guardrails always win
+        if (item.attempts >= 3) {
+          return {
+            ...item,
+            action: "STOP",
+            status: "Stopped",
+            explanation: "Safety guardrail stopped recovery after repeated failures.",
+            aiPowered: true,
+          };
+        }
 
-      if (item.attempts >= 3) {
-        action = "STOP";
-      } else if (item.reason === "checkout_abandoned") {
-        action = "PAYMENT_LINK";
-      } else {
-        action = "RETRY";
-      }
+        const prompt = `
+You are RecoverAI, an AI payment-recovery agent.
 
-      return {
-        ...item,
-        action,
-        status: action === "STOP" ? "Stopped" : "Ready",
-      };
-    });
+Analyze this payment recovery case and choose the safest action.
+
+Customer: ${item.customer}
+Amount: ${item.amount}
+Reason: ${item.reason}
+Previous attempts: ${item.attempts}
+
+Allowed actions:
+- RETRY for a normal recoverable payment failure.
+- PAYMENT_LINK when checkout was abandoned.
+- STOP when recovery should not continue.
+
+Return ONLY valid JSON:
+{
+  "action": "RETRY",
+  "explanation": "short explanation",
+  "riskLevel": "LOW"
+}
+`;
+
+        try {
+          const response = await fetch(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model: "openai/gpt-oss-120b",
+                messages: [
+                  {
+                    role: "system",
+                    content:
+                      "You are a careful payment recovery decision engine. Return JSON only.",
+                  },
+                  {
+                    role: "user",
+                    content: prompt,
+                  },
+                ],
+                temperature: 0.6,
+                max_completion_tokens: 1024,
+                reasoning_effort: "low",
+                response_format: {
+                  type: "json_object",
+                },
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Groq API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+
+          const raw = data.choices?.[0]?.message?.content || "";
+          const cleaned = raw.replace(/```json|```/g, "").trim();
+          const aiDecision = JSON.parse(cleaned);
+
+          const allowedActions = ["RETRY", "PAYMENT_LINK", "STOP"];
+
+          const action = allowedActions.includes(aiDecision.action)
+            ? aiDecision.action
+            : "STOP";
+
+          return {
+            ...item,
+            action,
+            status: action === "STOP" ? "Stopped" : "Ready",
+            explanation:
+              aiDecision.explanation || "AI selected a recovery strategy.",
+            riskLevel: aiDecision.riskLevel || "LOW",
+            aiPowered: true,
+          };
+        } catch (error) {
+          console.error(
+            `AI batch decision failed for ${item.customer}:`,
+            error.message
+          );
+
+          return {
+            ...item,
+            action: "STOP",
+            status: "Stopped",
+            explanation:
+              "AI decision was unavailable, so the safety guardrail stopped recovery.",
+            riskLevel: "HIGH",
+            aiPowered: false,
+          };
+        }
+      })
+    );
 
     const totalAtRisk = results.reduce(
       (sum, item) => sum + item.amount,
@@ -345,7 +440,16 @@ Return ONLY valid JSON:
       recoveryCandidates: recoveryCandidates.length,
       results,
     });
-  });
+  } catch (error) {
+    console.error("Batch recovery failed:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Batch recovery failed safely.",
+    });
+  }
+});
+    
   app.post("/api/payment/verify",async (req, res) => {
     try {
       const {
